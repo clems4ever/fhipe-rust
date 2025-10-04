@@ -1,6 +1,6 @@
 use ark_bls12_381::Bls12_381;
 use ark_ec::pairing::Pairing;
-use ark_ff::{PrimeField, Field};
+use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use std::collections::HashMap;
 
