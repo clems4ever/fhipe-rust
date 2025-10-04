@@ -12,7 +12,7 @@ use std::time::Instant;
 
 const VECTOR_DIM: usize = 384;
 const NUM_VECTORS: usize = 50;
-const SEARCH_SPACE: usize = 100000;
+const SEARCH_SPACE: usize = 1000000;
 
 /// Compute inner product <x, y> in cleartext
 fn compute_inner_product(x: &[Fr], y: &[Fr]) -> Fr {
