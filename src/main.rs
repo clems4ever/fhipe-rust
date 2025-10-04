@@ -1,8 +1,10 @@
 mod setup;
 mod keygen;
+mod encrypt;
 
 use setup::ipe_setup;
 use keygen::ipe_keygen;
+use encrypt::ipe_encrypt;
 use ark_bls12_381::Fr;
 use ark_ff::UniformRand;
 use rand::rngs::StdRng;
@@ -40,4 +42,17 @@ fn main() {
     println!("  K1 = g1^(α·det(B))");
     println!("  K2 = g1^(α·x·B)");
     println!("  Key generation successful!\n");
+    
+    // Step 3: Encrypt
+    println!("Step 3: Running IPE.Encrypt(msk, y)...");
+    
+    // Create a test vector y
+    let y: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
+    
+    let _ct = ipe_encrypt(&msk, &y, &mut rng);
+    
+    println!("Ciphertext generated:");
+    println!("  C1 = g2^β");
+    println!("  C2 = g2^(β·y·B*)");
+    println!("  Encryption successful!\n");
 }
