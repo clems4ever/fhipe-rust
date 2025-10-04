@@ -99,13 +99,9 @@ pub fn ipe_decrypt(pp: &PublicParams, sk: &SecretKey, ct: &Ciphertext) -> Option
     let d1 = Bls12_381::pairing(sk.k1, ct.c1).0;
     
     // Compute D2 = e(K2, C2) = ∏ e(K2[i], C2[i])
-    // This is the product of pairings over the vectors
-    let mut d2 = Gt::from(1u64); // multiplicative identity
-    
-    for i in 0..sk.k2.len() {
-        let pairing_i = Bls12_381::pairing(sk.k2[i], ct.c2[i]).0;
-        d2 *= pairing_i;
-    }
+    // Use multi_pairing for efficient computation of product of pairings
+    // multi_pairing computes ∏ e(a[i], b[i]) more efficiently than computing each pairing separately
+    let d2 = Bls12_381::multi_pairing(&sk.k2, &ct.c2).0;
     
     // Search for z ∈ S such that (D1)^z = D2 using Baby-Step Giant-Step
     // This is more efficient than linear search: O(√|S|) instead of O(|S|)
