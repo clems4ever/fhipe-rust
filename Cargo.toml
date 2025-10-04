@@ -10,6 +10,7 @@ ark-ff = "0.5"
 ark-serialize = { version = "0.5", features = ["derive"] }
 ark-std = "0.5"
 rand = "0.8"
+rayon = "1.10"
 
 [dev-dependencies]
 criterion = "0.5"
@@ -20,6 +21,10 @@ harness = false
 
 [[bench]]
 name = "simple_bench"
+harness = false
+
+[[bench]]
+name = "parallel_bench"
 harness = false
 
 [features]

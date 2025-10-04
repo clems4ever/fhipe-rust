@@ -383,6 +383,7 @@ dependencies = [
  "ark-std",
  "criterion",
  "rand",
+ "rayon",
 ]
 
 [[package]]
