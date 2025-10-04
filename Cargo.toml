@@ -11,5 +11,16 @@ ark-serialize = { version = "0.5", features = ["derive"] }
 ark-std = "0.5"
 rand = "0.8"
 
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "ipe_bench"
+harness = false
+
+[[bench]]
+name = "simple_bench"
+harness = false
+
 [features]
 default = []

@@ -21,6 +21,7 @@ pub struct MasterSecretKey {
     pub g2: G2Projective,
     pub b_matrix: Vec<Vec<Fr>>,      // B matrix (n x n)
     pub b_star_matrix: Vec<Vec<Fr>>, // B* matrix (n x n)
+    pub det_b: Fr,                   // det(B) - precomputed and cached
 }
 
 /// IPE.Setup(1^λ, S): Setup algorithm for Inner Product Encryption
@@ -44,11 +45,11 @@ pub fn ipe_setup(lambda: usize, n: usize, search_space_size: usize) -> (PublicPa
     // Sample B ← GL_n(Z_q) - generate a random invertible matrix
     let b_matrix = generate_invertible_matrix(n, &mut rng);
     
+    // Compute det(B) - will be cached in MSK to avoid recomputation
+    let det_b = matrix_determinant(&b_matrix);
+    
     // Compute B^(-1)
     let b_inverse = matrix_inverse(&b_matrix);
-    
-    // Compute det(B)
-    let det_b = matrix_determinant(&b_matrix);
     
     // Compute B* = det(B) · (B^(-1))^T
     let b_star_matrix = matrix_scalar_mult(&matrix_transpose(&b_inverse), det_b);
@@ -60,13 +61,14 @@ pub fn ipe_setup(lambda: usize, n: usize, search_space_size: usize) -> (PublicPa
         search_space_size,
     };
     
-    // Create master secret key
+    // Create master secret key with cached determinant
     let msk = MasterSecretKey {
         pp: pp.clone(),
         g1,
         g2,
         b_matrix,
         b_star_matrix,
+        det_b, // Cache the determinant to avoid recomputation in KeyGen
     };
     
     (pp, msk)
@@ -92,7 +94,7 @@ fn generate_invertible_matrix<R: rand::Rng>(n: usize, rng: &mut R) -> Vec<Vec<Fr
     }
 }
 
-/// Compute matrix determinant using Laplace expansion
+/// Compute matrix determinant using Gaussian elimination (O(n³) instead of O(n!) for Laplace)
 fn matrix_determinant(matrix: &[Vec<Fr>]) -> Fr {
     let n = matrix.len();
     
@@ -104,41 +106,47 @@ fn matrix_determinant(matrix: &[Vec<Fr>]) -> Fr {
         return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
     }
     
-    let mut det = Fr::zero();
-    let mut sign = Fr::one();
+    // Create a mutable copy for Gaussian elimination
+    let mut m = matrix.to_vec();
+    let mut det = Fr::one();
     
-    for j in 0..n {
-        let minor = get_minor(matrix, 0, j);
-        let cofactor = sign * matrix[0][j] * matrix_determinant(&minor);
-        det += cofactor;
-        sign = -sign;
+    // Gaussian elimination with partial pivoting
+    for i in 0..n {
+        // Find pivot
+        let mut max_row = i;
+        for k in (i + 1)..n {
+            if !m[k][i].is_zero() {
+                max_row = k;
+                break;
+            }
+        }
+        
+        // Swap rows if needed
+        if max_row != i {
+            m.swap(i, max_row);
+            det = -det; // Row swap changes sign of determinant
+        }
+        
+        // If diagonal element is zero, determinant is zero
+        if m[i][i].is_zero() {
+            return Fr::zero();
+        }
+        
+        // Multiply determinant by diagonal element
+        det *= m[i][i];
+        
+        // Eliminate column
+        let pivot_row = m[i].clone();
+        let pivot_elem = pivot_row[i];
+        for k in (i + 1)..n {
+            let factor = m[k][i] / pivot_elem;
+            for j in i..n {
+                m[k][j] -= factor * pivot_row[j];
+            }
+        }
     }
     
     det
-}
-
-/// Get the minor matrix by removing row i and column j
-fn get_minor(matrix: &[Vec<Fr>], row: usize, col: usize) -> Vec<Vec<Fr>> {
-    let n = matrix.len();
-    let mut minor = vec![vec![Fr::zero(); n - 1]; n - 1];
-    
-    let mut minor_row = 0;
-    for i in 0..n {
-        if i == row {
-            continue;
-        }
-        let mut minor_col = 0;
-        for j in 0..n {
-            if j == col {
-                continue;
-            }
-            minor[minor_row][minor_col] = matrix[i][j];
-            minor_col += 1;
-        }
-        minor_row += 1;
-    }
-    
-    minor
 }
 
 /// Compute matrix inverse using Gauss-Jordan elimination

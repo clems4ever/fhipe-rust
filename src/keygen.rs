@@ -1,5 +1,5 @@
 use ark_bls12_381::{Fr, G1Projective};
-use ark_ff::{Zero, One, UniformRand};
+use ark_ff::{Zero, UniformRand};
 use rand::Rng;
 
 use crate::setup::MasterSecretKey;
@@ -31,8 +31,8 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
     // Choose uniformly random α ← Z_q
     let alpha = Fr::rand(rng);
     
-    // Compute det(B)
-    let det_b = matrix_determinant(&msk.b_matrix);
+    // Use cached det(B) from MSK instead of recomputing
+    let det_b = msk.det_b;
     
     // Compute K1 = g1^(α·det(B))
     let k1 = msk.g1 * (alpha * det_b);
@@ -47,55 +47,6 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
         .collect();
     
     SecretKey { k1, k2 }
-}
-
-/// Compute matrix determinant using Laplace expansion
-fn matrix_determinant(matrix: &[Vec<Fr>]) -> Fr {
-    let n = matrix.len();
-    
-    if n == 1 {
-        return matrix[0][0];
-    }
-    
-    if n == 2 {
-        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0];
-    }
-    
-    let mut det = Fr::zero();
-    let mut sign = Fr::one();
-    
-    for j in 0..n {
-        let minor = get_minor(matrix, 0, j);
-        let cofactor = sign * matrix[0][j] * matrix_determinant(&minor);
-        det += cofactor;
-        sign = -sign;
-    }
-    
-    det
-}
-
-/// Get the minor matrix by removing row i and column j
-fn get_minor(matrix: &[Vec<Fr>], row: usize, col: usize) -> Vec<Vec<Fr>> {
-    let n = matrix.len();
-    let mut minor = vec![vec![Fr::zero(); n - 1]; n - 1];
-    
-    let mut minor_row = 0;
-    for i in 0..n {
-        if i == row {
-            continue;
-        }
-        let mut minor_col = 0;
-        for j in 0..n {
-            if j == col {
-                continue;
-            }
-            minor[minor_row][minor_col] = matrix[i][j];
-            minor_col += 1;
-        }
-        minor_row += 1;
-    }
-    
-    minor
 }
 
 /// Multiply a row vector by a matrix: result = x · B
