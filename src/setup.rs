@@ -1,5 +1,6 @@
 use ark_bls12_381::{Fr, G1Projective, G2Projective};
 use ark_ff::{Field, Zero, One, UniformRand};
+use rayon::prelude::*;
 use ark_std::rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -135,15 +136,21 @@ fn matrix_determinant(matrix: &[Vec<Fr>]) -> Fr {
         // Multiply determinant by diagonal element
         det *= m[i][i];
         
-        // Eliminate column
+        // Eliminate column: process rows k > i in parallel
         let pivot_row = m[i].clone();
         let pivot_elem = pivot_row[i];
-        for k in (i + 1)..n {
-            let factor = m[k][i] / pivot_elem;
-            for j in i..n {
-                m[k][j] -= factor * pivot_row[j];
+        let inv_pivot = pivot_elem.inverse().unwrap();
+        // Split mutable slice at i+1 to satisfy borrows, then parallelize
+        let (_head, tail) = m.split_at_mut(i + 1);
+        tail.par_iter_mut().for_each(|row_k| {
+            // factor = m[k][i] / pivot_elem = m[k][i] * inv_pivot
+            let factor = row_k[i] * inv_pivot;
+            if factor != Fr::zero() {
+                for j in i..n {
+                    row_k[j] -= factor * pivot_row[j];
+                }
             }
-        }
+        });
     }
     
     det
@@ -184,16 +191,32 @@ fn matrix_inverse(matrix: &[Vec<Fr>]) -> Vec<Vec<Fr>> {
         for j in 0..(2 * n) {
             aug[i][j] *= pivot_inv;
         }
+        let pivot_row = aug[i].clone();
         
-        // Eliminate column
-        for j in 0..n {
-            if i != j && aug[j][i] != Fr::zero() {
-                let factor = aug[j][i];
-                let row_i = aug[i].clone();
-                for k in 0..(2 * n) {
-                    aug[j][k] -= factor * row_i[k];
+        // Eliminate column in parallel for rows above and below i
+        // Rows above i
+        if i > 0 {
+            let (top, _rest) = aug.split_at_mut(i);
+            top.par_iter_mut().for_each(|row_j| {
+                let factor = row_j[i];
+                if factor != Fr::zero() {
+                    for k in 0..(2 * n) {
+                        row_j[k] -= factor * pivot_row[k];
+                    }
                 }
-            }
+            });
+        }
+        // Rows below i
+        if i + 1 < n {
+            let (_head, bottom) = aug.split_at_mut(i + 1);
+            bottom.par_iter_mut().for_each(|row_j| {
+                let factor = row_j[i];
+                if factor != Fr::zero() {
+                    for k in 0..(2 * n) {
+                        row_j[k] -= factor * pivot_row[k];
+                    }
+                }
+            });
         }
     }
     

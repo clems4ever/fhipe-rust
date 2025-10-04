@@ -39,9 +39,10 @@ pub fn ipe_encrypt<R: Rng>(msk: &MasterSecretKey, y: &[Fr], rng: &mut R) -> Ciph
     let y_b_star = matrix_vector_mult(y, &msk.b_star_matrix);
     
     // Compute C2 = g2^(β·(y·B*))
-    // Parallelize scalar multiplications for better performance
-    let c2: Vec<G2Projective> = y_b_star.par_iter()
-        .map(|&yb_i| msk.g2 * (beta * yb_i))
+    // Parallel scalar multiplications (fallback when fixed-base MSM API is not available)
+    let c2: Vec<G2Projective> = y_b_star
+        .into_par_iter()
+        .map(|yb_i| msk.g2 * (beta * yb_i))
         .collect();
     
     Ciphertext { c1, c2 }

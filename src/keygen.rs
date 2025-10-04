@@ -41,10 +41,10 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
     // Compute x·B (matrix-vector multiplication)
     let x_b = matrix_vector_mult(x, &msk.b_matrix);
     
-    // Compute K2 = g1^(α·(x·B))
-    // Parallelize scalar multiplications for better performance
-    let k2: Vec<G1Projective> = x_b.par_iter()
-        .map(|&xb_i| msk.g1 * (alpha * xb_i))
+    // Compute K2 = g1^(α·(x·B)) using parallel scalar multiplications (fallback)
+    let k2: Vec<G1Projective> = x_b
+        .into_par_iter()
+        .map(|xb_i| msk.g1 * (alpha * xb_i))
         .collect();
     
     SecretKey { k1, k2 }
