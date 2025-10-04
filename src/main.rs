@@ -1,10 +1,12 @@
 mod setup;
 mod keygen;
 mod encrypt;
+mod decrypt;
 
 use setup::ipe_setup;
 use keygen::ipe_keygen;
 use encrypt::ipe_encrypt;
+use decrypt::ipe_decrypt;
 use ark_bls12_381::Fr;
 use ark_ff::UniformRand;
 use rand::rngs::StdRng;
@@ -36,7 +38,7 @@ fn main() {
     // Create a test vector x
     let x: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
     
-    let _sk = ipe_keygen(&msk, &x, &mut rng);
+    let sk = ipe_keygen(&msk, &x, &mut rng);
     
     println!("Secret key generated:");
     println!("  K1 = g1^(α·det(B))");
@@ -49,10 +51,22 @@ fn main() {
     // Create a test vector y
     let y: Vec<Fr> = (0..n).map(|_| Fr::rand(&mut rng)).collect();
     
-    let _ct = ipe_encrypt(&msk, &y, &mut rng);
+    let ct = ipe_encrypt(&msk, &y, &mut rng);
     
     println!("Ciphertext generated:");
     println!("  C1 = g2^β");
     println!("  C2 = g2^(β·y·B*)");
     println!("  Encryption successful!\n");
+    
+    // Step 4: Decrypt
+    println!("Step 4: Running IPE.Decrypt(pp, sk, ct)...");
+    
+    let _result = ipe_decrypt(&pp, &sk, &ct);
+    
+    println!("Decryption result:");
+    println!("  D1 = e(K1, C1)");
+    println!("  D2 = e(K2, C2)");
+    println!("  Decryption successful!\n");
+    
+    println!("=== FHIPE Full Flow Complete ===");
 }
