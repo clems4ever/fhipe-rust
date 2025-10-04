@@ -6,7 +6,7 @@ mod decrypt;
 use setup::ipe_setup;
 use keygen::ipe_keygen;
 use encrypt::ipe_encrypt;
-use decrypt::{ipe_decrypt, recover_inner_product};
+use decrypt::ipe_decrypt;
 use ark_bls12_381::Fr;
 use rand::rngs::StdRng;
 use ark_std::rand::SeedableRng;
@@ -20,16 +20,18 @@ fn main() {
     // Example usage
     let lambda = 128; // Security parameter
     let n = 5;        // Vector dimension
+    let search_space_size = 1000; // |S| = poly(λ)
     
     println!("=== FHIPE Demo ===\n");
     
     // Step 1: Setup
     println!("Step 1: Running IPE.Setup(1^λ, n)...");
-    let (pp, msk) = ipe_setup(lambda, n);
+    let (pp, msk) = ipe_setup(lambda, n, search_space_size);
     
     println!("FHIPE Setup completed:");
     println!("  Security parameter λ = {}", pp.security_param);
     println!("  Dimension n = {}", pp.dimension);
+    println!("  Search space |S| = {}", pp.search_space_size);
     println!("  Generated g1 ∈ G1");
     println!("  Generated g2 ∈ G2");
     println!("  Generated B matrix ({}x{})", n, n);
@@ -71,12 +73,12 @@ fn main() {
     // Step 4: Decrypt
     println!("Step 4: Running IPE.Decrypt(pp, sk, ct)...");
     
-    let result = ipe_decrypt(&pp, &sk, &ct);
+    let recovered_ip = ipe_decrypt(&pp, &sk, &ct);
     
-    println!("Decryption result:");
+    println!("Decryption algorithm:");
     println!("  D1 = e(K1, C1)");
     println!("  D2 = e(K2, C2)");
-    println!("  Decryption successful!\n");
+    println!("  Searching for z ∈ S such that (D1)^z = D2...\n");
     
     // Step 5: Compute the actual inner product
     println!("Step 5: Computing inner product <x, y>...");
@@ -84,25 +86,10 @@ fn main() {
     let inner_prod = inner_product(&x, &y);
     println!("  Direct computation: <x, y> = {:?}\n", inner_prod);
     
-    // Step 6: Recover inner product from decryption using search
+    // Step 6: Verify recovered value
     println!("Step 6: Recovering inner product from decryption...");
-    println!("  Building search space S...");
     
-    // Create a search space
-    // In practice, S would be defined by the application
-    // For demonstration, we'll use a small range
-    let mut search_space = Vec::new();
-    
-    // For demo, create a small search space
-    // In practice, S = {0, 1, ..., poly(λ)} or application-specific values
-    for i in 0..1000 {
-        search_space.push(Fr::from(i as u64));
-    }
-    
-    println!("  Search space size: |S| = {}", search_space.len());
-    println!("  Searching for z such that (D1)^z = D2...");
-    
-    match recover_inner_product(&result, &search_space) {
+    match recovered_ip {
         Some(recovered) => {
             println!("  ✓ SUCCESS: Found z = {:?}", recovered);
             
@@ -117,7 +104,7 @@ fn main() {
         }
         None => {
             println!("  ✗ NOT FOUND: Inner product not in search space S");
-            println!("    The actual inner product may be outside the search range");
+            println!("    The actual inner product may be outside the search range [0, {})", search_space_size);
             println!("    Actual <x, y> = {:?}\n", inner_prod);
         }
     }
@@ -127,4 +114,5 @@ fn main() {
     println!("  The algorithm searches for z ∈ S such that (D1)^z = D2");
     println!("  where D1 = e(K1, C1) and D2 = e(K2, C2)");
     println!("  This z equals the inner product <x, y>");
+    println!("  Note: pp now properly includes the search space S as per the paper!");
 }

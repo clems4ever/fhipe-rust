@@ -73,8 +73,9 @@ mod tests {
     fn test_encrypt() {
         let lambda = 128;
         let n = 5;
+        let search_space_size = 1000;
         
-        let (_pp, msk) = ipe_setup(lambda, n);
+        let (_pp, msk) = ipe_setup(lambda, n, search_space_size);
         let mut rng = StdRng::seed_from_u64(42);
         
         // Create a test vector
@@ -96,8 +97,9 @@ mod tests {
     fn test_encrypt_wrong_dimension() {
         let lambda = 128;
         let n = 5;
+        let search_space_size = 1000;
         
-        let (_pp, msk) = ipe_setup(lambda, n);
+        let (_pp, msk) = ipe_setup(lambda, n, search_space_size);
         let mut rng = StdRng::seed_from_u64(42);
         
         // Create a test vector with wrong dimension

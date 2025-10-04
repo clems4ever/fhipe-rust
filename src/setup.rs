@@ -4,10 +4,13 @@ use ark_std::rand::SeedableRng;
 use rand::rngs::StdRng;
 
 /// Public parameters for FHIPE
+/// pp = (G1, G2, GT, q, e, S) in the paper
+/// Note: G1, G2, GT, q, e are implicitly defined by the BLS12-381 curve
 #[derive(Clone)]
 pub struct PublicParams {
     pub security_param: usize,
     pub dimension: usize,
+    pub search_space_size: usize,  // S = {0, 1, ..., search_space_size - 1}
 }
 
 /// Master secret key for FHIPE
@@ -24,12 +27,13 @@ pub struct MasterSecretKey {
 /// 
 /// # Arguments
 /// * `lambda` - Security parameter
-/// * `n` - Dimension of the vectors (S in the paper)
+/// * `n` - Dimension of the vectors
+/// * `search_space_size` - Size of the search space S = {0, 1, ..., search_space_size - 1}
 /// 
 /// # Returns
-/// * `PublicParams` - Public parameters
+/// * `PublicParams` - Public parameters pp = (G1, G2, GT, q, e, S)
 /// * `MasterSecretKey` - Master secret key containing pp, g1, g2, B, B*
-pub fn ipe_setup(lambda: usize, n: usize) -> (PublicParams, MasterSecretKey) {
+pub fn ipe_setup(lambda: usize, n: usize, search_space_size: usize) -> (PublicParams, MasterSecretKey) {
     // Initialize RNG with security parameter as seed
     let mut rng = StdRng::seed_from_u64(lambda as u64);
     
@@ -53,6 +57,7 @@ pub fn ipe_setup(lambda: usize, n: usize) -> (PublicParams, MasterSecretKey) {
     let pp = PublicParams {
         security_param: lambda,
         dimension: n,
+        search_space_size,
     };
     
     // Create master secret key
