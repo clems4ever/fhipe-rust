@@ -28,16 +28,16 @@ pub struct MasterSecretKey {
 /// IPE.Setup(1^λ, S): Setup algorithm for Inner Product Encryption
 /// 
 /// # Arguments
-/// * `lambda` - Security parameter
+/// * `seed` - Seed of the random generator
 /// * `n` - Dimension of the vectors
 /// * `search_space_size` - Size of the search space S = {0, 1, ..., search_space_size - 1}
 /// 
 /// # Returns
 /// * `PublicParams` - Public parameters pp = (G1, G2, GT, q, e, S)
 /// * `MasterSecretKey` - Master secret key containing pp, g1, g2, B, B*
-pub fn ipe_setup(lambda: usize, n: usize, search_space_size: usize) -> (PublicParams, MasterSecretKey) {
+pub fn ipe_setup(seed: usize, n: usize, search_space_size: usize) -> (PublicParams, MasterSecretKey) {
     // Initialize RNG with security parameter as seed
-    let mut rng = StdRng::seed_from_u64(lambda as u64);
+    let mut rng = StdRng::seed_from_u64(seed as u64);
     
     // Sample generators g1 ∈ G1 and g2 ∈ G2
     let g1 = G1Projective::rand(&mut rng);
@@ -57,7 +57,7 @@ pub fn ipe_setup(lambda: usize, n: usize, search_space_size: usize) -> (PublicPa
     
     // Create public parameters
     let pp = PublicParams {
-        security_param: lambda,
+        security_param: seed,
         dimension: n,
         search_space_size,
     };

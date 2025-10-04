@@ -1,5 +1,8 @@
 use ark_bls12_381::Bls12_381;
-use ark_ec::pairing::Pairing;
+use ark_ec::{
+    pairing::Pairing,
+    CurveGroup,
+};
 use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use std::collections::HashMap;
@@ -10,6 +13,8 @@ use crate::encrypt::Ciphertext;
 
 type Gt = <Bls12_381 as Pairing>::TargetField;
 type Fr = ark_bls12_381::Fr;
+type G1Prepared = <Bls12_381 as Pairing>::G1Prepared;
+type G2Prepared = <Bls12_381 as Pairing>::G2Prepared;
 
 /// Baby-Step Giant-Step algorithm for discrete logarithm in GT
 /// 
@@ -97,17 +102,50 @@ fn baby_step_giant_step(base: Gt, target: Gt, max_value: usize) -> Option<Fr> {
 /// This function computes D1 = e(K1, C1) and D2 = e(K2, C2), then searches
 /// for z ∈ S such that (D1)^z = D2
 pub fn ipe_decrypt(pp: &PublicParams, sk: &SecretKey, ct: &Ciphertext) -> Option<Fr> {
-    // Compute D1 = e(K1, C1)
-    // e: G1 × G2 → GT
-    let d1 = Bls12_381::pairing(sk.k1, ct.c1).0;
+    // Use prepared pairings: precompute Miller loop inputs, then apply a single final exponentiation
+    // Prepare K1 and C1
+    let k1_prep: G1Prepared = G1Prepared::from(sk.k1.into_affine());
+    let c1_prep: G2Prepared = G2Prepared::from(ct.c1.into_affine());
+    let ml_d1 = Bls12_381::multi_miller_loop(std::iter::once(k1_prep), std::iter::once(c1_prep));
+    let d1 = Bls12_381::final_exponentiation(ml_d1).unwrap().0;
     
-    // Compute D2 = e(K2, C2) = ∏ e(K2[i], C2[i])
-    // Use multi_pairing for efficient computation of product of pairings
-    // multi_pairing computes ∏ e(a[i], b[i]) more efficiently than computing each pairing separately
-    let d2 = Bls12_381::multi_pairing(&sk.k2, &ct.c2).0;
+    // Prepare K2 and C2 element-wise and compute a single multi Miller loop
+    let k2_prep: Vec<G1Prepared> = sk.k2.iter().map(|p| G1Prepared::from(p.into_affine())).collect();
+    let c2_prep: Vec<G2Prepared> = ct.c2.iter().map(|p| G2Prepared::from(p.into_affine())).collect();
+    let ml_d2 = Bls12_381::multi_miller_loop(k2_prep.into_iter(), c2_prep.into_iter());
+    let d2 = Bls12_381::final_exponentiation(ml_d2).unwrap().0;
     
     // Search for z ∈ S such that (D1)^z = D2 using Baby-Step Giant-Step
     // This is more efficient than linear search: O(√|S|) instead of O(|S|)
+    baby_step_giant_step(d1, d2, pp.search_space_size)
+}
+
+/// Prepared secret key to speed up repeated decryptions with the same key
+#[derive(Clone)]
+pub struct PreparedSecretKey {
+    pub k1_prep: G1Prepared,
+    pub k2_prep: Vec<G1Prepared>,
+}
+
+/// Prepare a secret key once to reuse pairing precomputations across decryptions
+pub fn prepare_secret_key(sk: &SecretKey) -> PreparedSecretKey {
+    let k1_prep = G1Prepared::from(sk.k1.into_affine());
+    let k2_prep = sk.k2.iter().map(|p| G1Prepared::from(p.into_affine())).collect();
+    PreparedSecretKey { k1_prep, k2_prep }
+}
+
+/// IPE.Decrypt using a prepared secret key (reuses prepared K2 across decryptions)
+pub fn ipe_decrypt_prepared(pp: &PublicParams, psk: &PreparedSecretKey, ct: &Ciphertext) -> Option<Fr> {
+    // Prepare C1 once per ciphertext
+    let c1_prep: G2Prepared = G2Prepared::from(ct.c1.into_affine());
+    let ml_d1 = Bls12_381::multi_miller_loop(std::iter::once(psk.k1_prep.clone()), std::iter::once(c1_prep));
+    let d1 = Bls12_381::final_exponentiation(ml_d1).unwrap().0;
+
+    // Prepare C2 per ciphertext, reuse prepared K2 from the secret key
+    let c2_prep: Vec<G2Prepared> = ct.c2.iter().map(|p| G2Prepared::from(p.into_affine())).collect();
+    let ml_d2 = Bls12_381::multi_miller_loop(psk.k2_prep.clone().into_iter(), c2_prep.into_iter());
+    let d2 = Bls12_381::final_exponentiation(ml_d2).unwrap().0;
+
     baby_step_giant_step(d1, d2, pp.search_space_size)
 }
 
@@ -175,6 +213,32 @@ mod tests {
         
         println!("Full IPE flow test passed!");
         println!("Successfully recovered inner product = 56");
+    }
+
+    #[test]
+    fn test_decrypt_prepared_secret_key() {
+        let lambda = 128;
+        let n = 4;
+        let search_space_size = 1000;
+
+        let (pp, msk) = ipe_setup(lambda, n, search_space_size);
+        let mut rng = StdRng::seed_from_u64(777);
+
+        // Create test vectors
+        let x: Vec<Fr> = vec![Fr::from(3), Fr::from(1), Fr::from(4), Fr::from(1)];
+        let y: Vec<Fr> = vec![Fr::from(5), Fr::from(9), Fr::from(2), Fr::from(6)];
+
+        // KeyGen and prepare secret key
+        let sk = ipe_keygen(&msk, &x, &mut rng);
+        let psk = prepare_secret_key(&sk);
+
+        // Encrypt and decrypt using prepared secret key
+        let ct = ipe_encrypt(&msk, &y, &mut rng);
+        let result = ipe_decrypt_prepared(&pp, &psk, &ct);
+
+        // <x,y> = 3*5 + 1*9 + 4*2 + 1*6 = 15 + 9 + 8 + 6 = 38
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), Fr::from(38u64));
     }
 }
 

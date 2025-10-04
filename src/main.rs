@@ -1,12 +1,9 @@
-mod setup;
-mod keygen;
-mod encrypt;
-mod decrypt;
-
-use setup::ipe_setup;
-use keygen::ipe_keygen;
-use encrypt::ipe_encrypt;
-use decrypt::ipe_decrypt;
+use fhipe_rust::{
+    setup::ipe_setup,
+    keygen::ipe_keygen,
+    encrypt::ipe_encrypt,
+    decrypt::ipe_decrypt,
+};
 use ark_bls12_381::Fr;
 use rand::rngs::StdRng;
 use ark_std::rand::SeedableRng;

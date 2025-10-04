@@ -9,7 +9,7 @@ use ark_std::rand::Rng;
 use crate::setup::{PublicParams, MasterSecretKey};
 use crate::keygen::SecretKey;
 use crate::encrypt::{ipe_encrypt, Ciphertext};
-use crate::decrypt::ipe_decrypt;
+use crate::decrypt::{prepare_secret_key, ipe_decrypt_prepared};
 use ark_bls12_381::Fr;
 
 /// Parallel batch encryption of multiple vectors
@@ -47,6 +47,7 @@ pub fn parallel_encrypt<R: Rng + Clone + Send + Sync>(
 /// Parallel batch decryption of multiple ciphertexts with the same key
 /// 
 /// Decrypts multiple ciphertexts in parallel across available CPU cores.
+/// Uses prepared pairings to optimize repeated decryptions with the same key.
 /// This is significantly faster than sequential decryption for large batches.
 /// 
 /// # Arguments
@@ -59,13 +60,17 @@ pub fn parallel_encrypt<R: Rng + Clone + Send + Sync>(
 /// 
 /// # Performance
 /// Expected speedup: ~N cores for large batches (embarrassingly parallel)
+/// Additional optimization: Prepares the secret key once and reuses it across all decryptions
 pub fn parallel_decrypt(
     pp: &PublicParams,
     sk: &SecretKey,
     ciphertexts: &[Ciphertext]
 ) -> Vec<Option<Fr>> {
+    // Prepare the secret key once to reuse prepared K2 across all decryptions
+    let prepared_sk = prepare_secret_key(sk);
+    
     ciphertexts.par_iter()
-        .map(|ct| ipe_decrypt(pp, sk, ct))
+        .map(|ct| ipe_decrypt_prepared(pp, &prepared_sk, ct))
         .collect()
 }
 
