@@ -10,7 +10,7 @@ use ark_std::rand::SeedableRng;
 use rand::rngs::StdRng;
 use std::time::Instant;
 
-const VECTOR_DIM: usize = 384;
+const VECTOR_DIM: usize = 256;
 const NUM_VECTORS: usize = 50;
 const SEARCH_SPACE: usize = 1000000;
 
