@@ -1,6 +1,8 @@
 use ark_bls12_381::Bls12_381;
 use ark_ec::pairing::Pairing;
 use ark_ff::{PrimeField, Field};
+use ark_serialize::CanonicalSerialize;
+use std::collections::HashMap;
 
 use crate::setup::PublicParams;
 use crate::keygen::SecretKey;
@@ -8,6 +10,76 @@ use crate::encrypt::Ciphertext;
 
 type Gt = <Bls12_381 as Pairing>::TargetField;
 type Fr = ark_bls12_381::Fr;
+
+/// Baby-Step Giant-Step algorithm for discrete logarithm in GT
+/// 
+/// Find z such that base^z = target, where 0 ≤ z < max_value
+/// 
+/// Complexity: O(√max_value) time, O(√max_value) space
+/// 
+/// # Algorithm
+/// 1. Let m = ⌈√max_value⌉
+/// 2. Baby steps: Compute and store base^j for j = 0..m in a hash table
+/// 3. Giant steps: Compute base^(-m), then check if target * (base^(-m))^i is in table
+/// 4. If found at index j with giant step i, then z = i*m + j
+fn baby_step_giant_step(base: Gt, target: Gt, max_value: usize) -> Option<Fr> {
+    if max_value == 0 {
+        return None;
+    }
+    
+    // Special case: check if target == 1 (z = 0)
+    if target == Gt::from(1u64) {
+        return Some(Fr::from(0u64));
+    }
+    
+    // m = ceiling(sqrt(max_value))
+    let m = (max_value as f64).sqrt().ceil() as usize;
+    
+    // Baby steps: Build hash table using serialized bytes as keys
+    let mut baby_steps = HashMap::new();
+    let mut current = Gt::from(1u64); // base^0
+    
+    for j in 0..=m {
+        // Serialize to bytes for consistent hashing
+        let mut bytes = Vec::new();
+        current.serialize_compressed(&mut bytes).unwrap();
+        baby_steps.insert(bytes, j);
+        
+        if j < m {
+            current *= base; // Compute base^(j+1)
+        }
+    }
+    
+    // base_m is the last computed value (base^m)
+    let base_m = current;
+    
+    // Compute base^(-m) = (base^m)^(-1)
+    let base_inv_m = base_m.inverse().unwrap();
+    
+    // Giant steps: Check if target * (base^(-m))^i is in the baby_steps table
+    let mut gamma = target;
+    
+    for i in 0..=m {
+        // Serialize gamma to check if it's in the baby steps
+        let mut bytes = Vec::new();
+        gamma.serialize_compressed(&mut bytes).unwrap();
+        
+        if let Some(&j) = baby_steps.get(&bytes) {
+            // Found! z = i*m + j
+            let z_val = i * m + j;
+            if z_val < max_value {
+                return Some(Fr::from(z_val as u64));
+            }
+        }
+        
+        if i < m {
+            gamma *= base_inv_m; // Compute target * (base^(-m))^(i+1)
+        }
+    }
+    
+    // Not found in search space
+    None
+}
 
 /// IPE.Decrypt(pp, sk, ct): Decryption algorithm for Inner Product Encryption
 /// 
@@ -35,22 +107,9 @@ pub fn ipe_decrypt(pp: &PublicParams, sk: &SecretKey, ct: &Ciphertext) -> Option
         d2 *= pairing_i;
     }
     
-    // Search for z ∈ S such that (D1)^z = D2
-    // S = {0, 1, ..., search_space_size - 1}
-    for z_val in 0..pp.search_space_size {
-        let z = Fr::from(z_val as u64);
-        
-        // Compute D1^z
-        let d1_pow_z = d1.pow(z.into_bigint().0);
-        
-        // Check if D1^z == D2
-        if d1_pow_z == d2 {
-            return Some(z);
-        }
-    }
-    
-    // If no z found, output ⊥ (None)
-    None
+    // Search for z ∈ S such that (D1)^z = D2 using Baby-Step Giant-Step
+    // This is more efficient than linear search: O(√|S|) instead of O(|S|)
+    baby_step_giant_step(d1, d2, pp.search_space_size)
 }
 
 #[cfg(test)]
