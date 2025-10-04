@@ -1,6 +1,7 @@
 use ark_bls12_381::{Fr, G1Projective};
 use ark_ff::{Zero, UniformRand};
 use rand::Rng;
+use rayon::prelude::*;
 
 use crate::setup::MasterSecretKey;
 
@@ -41,28 +42,30 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
     let x_b = matrix_vector_mult(x, &msk.b_matrix);
     
     // Compute K2 = g1^(α·(x·B))
-    // This is a VECTOR of group elements: [g1^(α·(x·B)[0]), g1^(α·(x·B)[1]), ..., g1^(α·(x·B)[n-1])]
-    let k2: Vec<G1Projective> = x_b.iter()
+    // Parallelize scalar multiplications for better performance
+    let k2: Vec<G1Projective> = x_b.par_iter()
         .map(|&xb_i| msk.g1 * (alpha * xb_i))
         .collect();
     
     SecretKey { k1, k2 }
 }
 
-/// Multiply a row vector by a matrix: result = x · B
+/// Multiply a row vector by a matrix: result = x · B (optimized version)
 fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
     let n = matrix.len();
-    let mut result = vec![Fr::zero(); n];
     
-    // x · B where x is a row vector and B is n×n matrix
-    // result[j] = sum_i(x[i] * B[i][j])
-    for j in 0..n {
-        for i in 0..n {
-            result[j] += x[i] * matrix[i][j];
-        }
-    }
-    
-    result
+    // Parallelize over output elements for better performance
+    // Each column can be computed independently
+    (0..n).into_par_iter()
+        .map(|j| {
+            // result[j] = sum_i(x[i] * matrix[i][j])
+            let mut sum = Fr::zero();
+            for i in 0..n {
+                sum += x[i] * matrix[i][j];
+            }
+            sum
+        })
+        .collect()
 }
 
 #[cfg(test)]

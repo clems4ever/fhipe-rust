@@ -1,6 +1,7 @@
 use ark_bls12_381::{Fr, G2Projective};
 use ark_ff::{Zero, UniformRand};
 use rand::Rng;
+use rayon::prelude::*;
 
 use crate::setup::MasterSecretKey;
 
@@ -38,28 +39,30 @@ pub fn ipe_encrypt<R: Rng>(msk: &MasterSecretKey, y: &[Fr], rng: &mut R) -> Ciph
     let y_b_star = matrix_vector_mult(y, &msk.b_star_matrix);
     
     // Compute C2 = g2^(β·(y·B*))
-    // This is a VECTOR of group elements: [g2^(β·(y·B*)[0]), g2^(β·(y·B*)[1]), ..., g2^(β·(y·B*)[n-1])]
-    let c2: Vec<G2Projective> = y_b_star.iter()
+    // Parallelize scalar multiplications for better performance
+    let c2: Vec<G2Projective> = y_b_star.par_iter()
         .map(|&yb_i| msk.g2 * (beta * yb_i))
         .collect();
     
     Ciphertext { c1, c2 }
 }
 
-/// Multiply a row vector by a matrix: result = y · B*
+/// Multiply a row vector by a matrix: result = y · B* (optimized version)
 fn matrix_vector_mult(y: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
     let n = matrix.len();
-    let mut result = vec![Fr::zero(); n];
     
-    // y · B* where y is a row vector and B* is n×n matrix
-    // result[j] = sum_i(y[i] * B*[i][j])
-    for j in 0..n {
-        for i in 0..n {
-            result[j] += y[i] * matrix[i][j];
-        }
-    }
-    
-    result
+    // Parallelize over output elements for better performance
+    // Each column can be computed independently
+    (0..n).into_par_iter()
+        .map(|j| {
+            // result[j] = sum_i(y[i] * matrix[i][j])
+            let mut sum = Fr::zero();
+            for i in 0..n {
+                sum += y[i] * matrix[i][j];
+            }
+            sum
+        })
+        .collect()
 }
 
 #[cfg(test)]

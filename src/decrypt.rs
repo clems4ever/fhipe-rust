@@ -35,15 +35,18 @@ fn baby_step_giant_step(base: Gt, target: Gt, max_value: usize) -> Option<Fr> {
     // m = ceiling(sqrt(max_value))
     let m = (max_value as f64).sqrt().ceil() as usize;
     
+    // Pre-allocate serialization buffer to avoid repeated allocations
+    let mut scratch_buffer = Vec::with_capacity(576); // GT elements serialize to 576 bytes
+    
     // Baby steps: Build hash table using serialized bytes as keys
-    let mut baby_steps = HashMap::new();
+    let mut baby_steps = HashMap::with_capacity(m + 1);
     let mut current = Gt::from(1u64); // base^0
     
     for j in 0..=m {
         // Serialize to bytes for consistent hashing
-        let mut bytes = Vec::new();
-        current.serialize_compressed(&mut bytes).unwrap();
-        baby_steps.insert(bytes, j);
+        scratch_buffer.clear();
+        current.serialize_compressed(&mut scratch_buffer).unwrap();
+        baby_steps.insert(scratch_buffer.clone(), j);
         
         if j < m {
             current *= base; // Compute base^(j+1)
@@ -61,10 +64,10 @@ fn baby_step_giant_step(base: Gt, target: Gt, max_value: usize) -> Option<Fr> {
     
     for i in 0..=m {
         // Serialize gamma to check if it's in the baby steps
-        let mut bytes = Vec::new();
-        gamma.serialize_compressed(&mut bytes).unwrap();
+        scratch_buffer.clear();
+        gamma.serialize_compressed(&mut scratch_buffer).unwrap();
         
-        if let Some(&j) = baby_steps.get(&bytes) {
+        if let Some(&j) = baby_steps.get(&scratch_buffer) {
             // Found! z = i*m + j
             let z_val = i * m + j;
             if z_val < max_value {
