@@ -7,8 +7,8 @@ use crate::setup::MasterSecretKey;
 /// Ciphertext for IPE
 #[derive(Clone, Debug)]
 pub struct Ciphertext {
-    pub c1: G2Projective,  // C1 = g2^β
-    pub c2: G2Projective,  // C2 = g2^(β·y·B*)
+    pub c1: G2Projective,      // C1 = g2^β
+    pub c2: Vec<G2Projective>, // C2 = g2^(β·y·B*) - vector of group elements
 }
 
 /// IPE.Encrypt(msk, y): Encryption algorithm for Inner Product Encryption
@@ -37,11 +37,11 @@ pub fn ipe_encrypt<R: Rng>(msk: &MasterSecretKey, y: &[Fr], rng: &mut R) -> Ciph
     // Compute y·B* (matrix-vector multiplication)
     let y_b_star = matrix_vector_mult(y, &msk.b_star_matrix);
     
-    // Compute C2 = g2^(β·y·B*)
-    // Similar to keygen, we interpret y·B* as a vector and compute the sum
-    let beta_y_b_star = vector_scalar_mult(&y_b_star, beta);
-    let sum_y_b_star = vector_sum(&beta_y_b_star);
-    let c2 = msk.g2 * sum_y_b_star;
+    // Compute C2 = g2^(β·(y·B*))
+    // This is a VECTOR of group elements: [g2^(β·(y·B*)[0]), g2^(β·(y·B*)[1]), ..., g2^(β·(y·B*)[n-1])]
+    let c2: Vec<G2Projective> = y_b_star.iter()
+        .map(|&yb_i| msk.g2 * (beta * yb_i))
+        .collect();
     
     Ciphertext { c1, c2 }
 }
@@ -60,16 +60,6 @@ fn matrix_vector_mult(y: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
     }
     
     result
-}
-
-/// Multiply a vector by a scalar
-fn vector_scalar_mult(vector: &[Fr], scalar: Fr) -> Vec<Fr> {
-    vector.iter().map(|&v| v * scalar).collect()
-}
-
-/// Compute the sum of all components in a vector
-fn vector_sum(vector: &[Fr]) -> Fr {
-    vector.iter().fold(Fr::zero(), |acc, &x| acc + x)
 }
 
 #[cfg(test)]
@@ -93,9 +83,10 @@ mod tests {
         // Encrypt
         let ct = ipe_encrypt(&msk, &y, &mut rng);
         
-        // Verify that C1 and C2 are not identity (zero in additive notation)
+        // Verify that C1 is not identity and C2 has correct dimension
         assert_ne!(ct.c1, G2Projective::zero());
-        assert_ne!(ct.c2, G2Projective::zero());
+        assert_eq!(ct.c2.len(), n);
+        assert!(ct.c2.iter().all(|&c| c != G2Projective::zero()));
         
         println!("Encrypt test passed!");
     }

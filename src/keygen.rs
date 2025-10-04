@@ -7,8 +7,8 @@ use crate::setup::MasterSecretKey;
 /// Secret key for IPE
 #[derive(Clone, Debug)]
 pub struct SecretKey {
-    pub k1: G1Projective,  // K1 = g1^(α·det(B))
-    pub k2: G1Projective,  // K2 = g1^(α·x·B)
+    pub k1: G1Projective,      // K1 = g1^(α·det(B))
+    pub k2: Vec<G1Projective>, // K2 = g1^(α·x·B) - vector of group elements
 }
 
 /// IPE.KeyGen(msk, x): Key generation algorithm for Inner Product Encryption
@@ -40,25 +40,11 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
     // Compute x·B (matrix-vector multiplication)
     let x_b = matrix_vector_mult(x, &msk.b_matrix);
     
-    // Compute K2 = g1^(α·x·B)
-    // First compute the scalar α·x·B (which is a vector)
-    // Then compute g1^(sum of components) or use multi-scalar multiplication
-    // Actually, K2 should be g1^(α·(x·B)) where x·B is treated as a scalar exponent
-    // We need to interpret this correctly based on the paper
-    
-    // Computing as: K2 = g1^(α) raised to the power of each component of x·B
-    // This is actually g1^(α·x·B) where we compute the inner product as an exponent
-    let alpha_x_b = vector_scalar_mult(&x_b, alpha);
-    
-    // For the elliptic curve implementation, we need to interpret this as:
-    // K2 represents g1 raised to α times the result of x·B
-    // Since x·B is a vector, we likely want g1^(α·<x,B[i]>) for encoding
-    // Based on IPE schemes, this is typically encoded as a single group element
-    
-    // Compute the sum of all components (or we might need to return a vector)
-    // For now, interpreting as g1^(α·sum(x·B))
-    let sum_x_b = vector_sum(&alpha_x_b);
-    let k2 = msk.g1 * sum_x_b;
+    // Compute K2 = g1^(α·(x·B))
+    // This is a VECTOR of group elements: [g1^(α·(x·B)[0]), g1^(α·(x·B)[1]), ..., g1^(α·(x·B)[n-1])]
+    let k2: Vec<G1Projective> = x_b.iter()
+        .map(|&xb_i| msk.g1 * (alpha * xb_i))
+        .collect();
     
     SecretKey { k1, k2 }
 }
@@ -128,16 +114,6 @@ fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
     result
 }
 
-/// Multiply a vector by a scalar
-fn vector_scalar_mult(vector: &[Fr], scalar: Fr) -> Vec<Fr> {
-    vector.iter().map(|&v| v * scalar).collect()
-}
-
-/// Compute the sum of all components in a vector
-fn vector_sum(vector: &[Fr]) -> Fr {
-    vector.iter().fold(Fr::zero(), |acc, &x| acc + x)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,7 +126,7 @@ mod tests {
         let lambda = 128;
         let n = 5;
         
-        let (pp, msk) = ipe_setup(lambda, n);
+        let (_pp, msk) = ipe_setup(lambda, n);
         let mut rng = StdRng::seed_from_u64(42);
         
         // Create a test vector
@@ -159,9 +135,10 @@ mod tests {
         // Generate secret key
         let sk = ipe_keygen(&msk, &x, &mut rng);
         
-        // Verify that K1 and K2 are not identity (zero in additive notation)
+        // Verify that K1 is not identity and K2 has correct dimension
         assert_ne!(sk.k1, G1Projective::zero());
-        assert_ne!(sk.k2, G1Projective::zero());
+        assert_eq!(sk.k2.len(), n);
+        assert!(sk.k2.iter().all(|&k| k != G1Projective::zero()));
         
         println!("KeyGen test passed!");
     }
@@ -172,13 +149,13 @@ mod tests {
         let lambda = 128;
         let n = 5;
         
-        let (pp, msk) = ipe_setup(lambda, n);
+        let (_pp, msk) = ipe_setup(lambda, n);
         let mut rng = StdRng::seed_from_u64(42);
         
         // Create a test vector with wrong dimension
         let x: Vec<Fr> = (0..3).map(|_| Fr::rand(&mut rng)).collect();
         
         // This should panic
-        let sk = ipe_keygen(&msk, &x, &mut rng);
+        let _sk = ipe_keygen(&msk, &x, &mut rng);
     }
 }
