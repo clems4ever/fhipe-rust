@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
-use fhipe_rust::{
+use fhipe_rust::v1::{
     setup::ipe_setup,
     keygen::ipe_keygen,
     encrypt::ipe_encrypt,

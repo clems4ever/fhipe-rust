@@ -7,9 +7,9 @@ use ark_ff::Field;
 use ark_serialize::CanonicalSerialize;
 use std::collections::HashMap;
 
-use crate::setup::PublicParams;
-use crate::keygen::SecretKey;
-use crate::encrypt::Ciphertext;
+use crate::v1::setup::PublicParams;
+use crate::v1::keygen::SecretKey;
+use crate::v1::encrypt::Ciphertext;
 
 type Gt = <Bls12_381 as Pairing>::TargetField;
 type Fr = ark_bls12_381::Fr;
@@ -152,9 +152,9 @@ pub fn ipe_decrypt_prepared(pp: &PublicParams, psk: &PreparedSecretKey, ct: &Cip
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::setup::ipe_setup;
-    use crate::keygen::ipe_keygen;
-    use crate::encrypt::ipe_encrypt;
+    use crate::v1::setup::ipe_setup;
+    use crate::v1::keygen::ipe_keygen;
+    use crate::v1::encrypt::ipe_encrypt;
     use ark_bls12_381::Fr;
     use ark_std::rand::SeedableRng;
     use rand::rngs::StdRng;

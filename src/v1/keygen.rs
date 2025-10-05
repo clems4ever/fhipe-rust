@@ -3,7 +3,7 @@ use ark_ff::{Zero, UniformRand};
 use rand::Rng;
 use rayon::prelude::*;
 
-use crate::setup::MasterSecretKey;
+use crate::v1::setup::MasterSecretKey;
 
 /// Secret key for IPE
 #[derive(Clone, Debug)]
@@ -71,7 +71,7 @@ pub(crate) fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::setup::ipe_setup;
+    use crate::v1::setup::ipe_setup;
     use ark_std::rand::SeedableRng;
     use rand::rngs::StdRng;
 
