@@ -3,26 +3,27 @@ use ark_ff::{Zero, UniformRand};
 use rand::Rng;
 use rayon::prelude::*;
 
-use crate::v1::setup::MasterSecretKey;
+use crate::v2::setup::MasterSecretKey;
 
-/// Secret key for IPE
+/// Secret key for IPE with correlated bases
 #[derive(Clone, Debug)]
 pub struct SecretKey {
-    pub k1: G1Projective,      // K1 = g1^(α·det(B))
-    pub k2: Vec<G1Projective>, // K2 = g1^(α·x·B) - vector of group elements
+    pub k1: G1Projective,       // K1 = g1^(α·det(B))
+    pub k2: Vec<G1Projective>,  // K2[i] = Uᵢ^(α·uᵢ) - will be used in multi-pairing
 }
 
-/// IPE.KeyGen(msk, x): Key generation algorithm for Inner Product Encryption
+/// IPE.KeyGen(msk, x): Key generation algorithm for Inner Product Encryption with correlated bases
 /// 
 /// # Arguments
-/// * `msk` - Master secret key containing g1, g2, B, B*
+/// * `msk` - Master secret key containing g1, g2, B, B*, and correlated bases Uᵢ
 /// * `x` - Vector x ∈ Z_q^n for which to generate the secret key
 /// * `rng` - Random number generator
 /// 
 /// # Returns
 /// * `SecretKey` - Secret key sk = (K1, K2) where:
 ///   - K1 = g1^(α·det(B))
-///   - K2 = g1^(α·x·B)
+///   - K2[i] = Uᵢ^(α·uᵢ) where u = x·B and Uᵢ = g₁^(γᵢ)
+///   - Multi-pairing e(K2, C2) = ∏ᵢ e(K2[i], C2[i]) = ∏ᵢ e(Uᵢ, Vᵢ)^(α·β·uᵢ·vᵢ)
 pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> SecretKey {
     let n = msk.pp.dimension;
     
@@ -38,13 +39,19 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
     // Compute K1 = g1^(α·det(B))
     let k1 = msk.g1 * (alpha * det_b);
     
-    // Compute x·B (matrix-vector multiplication)
-    let x_b = matrix_vector_mult(x, &msk.b_matrix);
+    // Compute u = x·B (matrix-vector multiplication)
+    let u = matrix_vector_mult(x, &msk.b_matrix);
     
-    // Compute K2 = g1^(α·(x·B)) using parallel scalar multiplications (fallback)
-    let k2: Vec<G1Projective> = x_b
+    // Compute K2[i] = Uᵢ^(α·uᵢ) using correlated bases
+    // When multi-paired with C2[i] = Vᵢ^(β·vᵢ):
+    // ∏ᵢ e(Uᵢ^(α·uᵢ), Vᵢ^(β·vᵢ)) = ∏ᵢ e(Uᵢ, Vᵢ)^(α·β·uᵢ·vᵢ) 
+    //                            = ∏ᵢ e(g1, g2)^(α·β·uᵢ·vᵢ)  (since e(Uᵢ,Vᵢ) = e(g1,g2))
+    //                            = e(g1, g2)^(α·β·Σᵢ uᵢ·vᵢ)
+    //                            = e(g1, g2)^(α·β·det(B)·<x,y>)
+    let k2: Vec<G1Projective> = u
         .into_par_iter()
-        .map(|xb_i| msk.g1 * (alpha * xb_i))
+        .zip(&msk.u_bases)
+        .map(|(u_i, &base_i)| base_i * (alpha * u_i))
         .collect();
     
     SecretKey { k1, k2 }
@@ -71,7 +78,7 @@ pub(crate) fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::setup::ipe_setup;
+    use crate::v2::setup::ipe_setup;
     use ark_std::rand::SeedableRng;
     use rand::rngs::StdRng;
 
@@ -90,7 +97,7 @@ mod tests {
         // Generate secret key
         let sk = ipe_keygen(&msk, &x, &mut rng);
         
-        // Verify that K1 is not identity and K2 has correct dimension
+        // Verify that K1 and K2 are not identity elements
         assert_ne!(sk.k1, G1Projective::zero());
         assert_eq!(sk.k2.len(), n);
         assert!(sk.k2.iter().all(|&k| k != G1Projective::zero()));

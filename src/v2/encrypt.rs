@@ -8,8 +8,8 @@ use crate::v2::setup::MasterSecretKey;
 /// Ciphertext for IPE with correlated bases
 #[derive(Clone, Debug)]
 pub struct Ciphertext {
-    pub c1: G2Projective,  // C1 = g2^β
-    pub c2: G2Projective,  // C̃2 = ∏ᵢ Vᵢ^(β·vᵢ) - single group element
+    pub c1: G2Projective,       // C1 = g2^β
+    pub c2: Vec<G2Projective>,  // C2[i] = Vᵢ^(β·vᵢ) - will be used in multi-pairing
 }
 
 /// IPE.Encrypt(msk, y): Encryption algorithm for Inner Product Encryption with correlated bases
@@ -20,9 +20,10 @@ pub struct Ciphertext {
 /// * `rng` - Random number generator
 /// 
 /// # Returns
-/// * `Ciphertext` - Ciphertext ct = (C1, C̃2) where:
+/// * `Ciphertext` - Ciphertext ct = (C1, C2) where:
 ///   - C1 = g2^β
-///   - C̃2 = ∏ᵢ Vᵢ^(β·vᵢ) where v = y·B* and Vᵢ = g₂^(γᵢ⁻¹)
+///   - C2[i] = Vᵢ^(β·vᵢ) where v = y·B* and Vᵢ = g₂^(γᵢ⁻¹)
+///   - Multi-pairing e(K2, C2) = ∏ᵢ e(K2[i], C2[i]) computed in single operation
 pub fn ipe_encrypt<R: Rng>(msk: &MasterSecretKey, y: &[Fr], rng: &mut R) -> Ciphertext {
     let n = msk.pp.dimension;
     
@@ -38,13 +39,14 @@ pub fn ipe_encrypt<R: Rng>(msk: &MasterSecretKey, y: &[Fr], rng: &mut R) -> Ciph
     // Compute v = y·B* (matrix-vector multiplication)
     let v = matrix_vector_mult(y, &msk.b_star_matrix);
     
-    // Compute C̃2 = ∏ᵢ Vᵢ^(β·vᵢ) using correlated bases
-    // This aggregates all exponentiations into a single group element
-    let c2 = v
+    // Compute C2[i] = Vᵢ^(β·vᵢ) using correlated bases
+    // When paired with K2[i] = Uᵢ^(α·uᵢ), we get e(Uᵢ, Vᵢ)^(α·β·uᵢ·vᵢ)
+    // Multi-pairing aggregates: ∏ᵢ e(Uᵢ, Vᵢ)^(α·β·uᵢ·vᵢ) = e(g1, g2)^(α·β·Σᵢ uᵢ·vᵢ)
+    let c2: Vec<G2Projective> = v
         .into_par_iter()
         .zip(&msk.v_bases)
         .map(|(v_i, &base_i)| base_i * (beta * v_i))
-        .reduce(|| G2Projective::zero(), |acc, x| acc + x);
+        .collect();
     
     Ciphertext { c1, c2 }
 }
@@ -89,9 +91,10 @@ mod tests {
         // Encrypt
         let ct = ipe_encrypt(&msk, &y, &mut rng);
         
-        // Verify that C1 and C̃2 are not identity elements
+        // Verify that C1 and C2 are not identity elements
         assert_ne!(ct.c1, G2Projective::zero());
-        assert_ne!(ct.c2, G2Projective::zero());
+        assert_eq!(ct.c2.len(), n);
+        assert!(ct.c2.iter().all(|&c| c != G2Projective::zero()));
         
         println!("Encrypt test passed!");
     }

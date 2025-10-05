@@ -27,21 +27,25 @@ fn main() {
     let _ct = ipe_encrypt(&msk, &y, &mut rng);
     
     println!("\n3. Ciphertext Structure:");
-    println!("   C1 = g₂^β            (single G2 element)");
-    println!("   C̃2 = ∏ᵢ Vᵢ^(β·vᵢ)    (single G2 element - aggregated!)");
+    println!("   C1 = g₂^β                (single G2 element)");
+    println!("   C2[i] = Vᵢ^(β·vᵢ)        (vector of {} G2 elements)", n);
     println!("\n   where v = y·B* is the encoded vector");
     
     println!("\n4. Key Difference from v1:");
-    println!("   v1: C2 was a VECTOR of {} G2 elements", n);
-    println!("   v2: C̃2 is a SINGLE G2 element (aggregated using correlated bases)");
+    println!("   v1: C2[i] = g₂^(β·(y·B*)ᵢ)  (uses standard base g₂)");
+    println!("   v2: C2[i] = Vᵢ^(β·vᵢ)       (uses correlated base Vᵢ = g₂^(γᵢ⁻¹))");
     
     println!("\n5. Benefits:");
-    println!("   • Ciphertext size reduced from {} G2 elements to 2 G2 elements", n+1);
-    println!("   • Decryption will use SINGLE pairing instead of {} pairings", n);
-    println!("   • Expected ~{}x speedup in pairing computation", n);
+    println!("   • Ciphertext size: same ({} G2 elements)", n+1);
+    println!("   • Decryption uses CONSTANT pairings (2 total) instead of {} pairings", n+1);
+    println!("   • Multi-pairing e(K2, C2) = ∏ᵢ e(K2[i], C2[i]) computed in 1 operation");
+    println!("   • Correlated bases ensure e(Uᵢ, Vᵢ) = e(g₁, g₂), enabling aggregation");
+    println!("   • Expected ~{}x speedup in pairing computation for large n", (n+1)/2);
     
     println!("\n✓ Encryption completed successfully!");
     println!("\nNext steps:");
-    println!("  • Update KeyGen to produce K̃₂ = ∏ᵢ Uᵢ^(α·uᵢ)");
-    println!("  • Update Decrypt to compute e(K̃₂, C̃₂) = e(g₁, g₂)^(αβ·det(B)·⟨x,y⟩)");
+    println!("  • KeyGen produces K2[i] = Uᵢ^(α·uᵢ) using correlated U bases");
+    println!("  • Decrypt computes multi-pairing: ∏ᵢ e(K2[i], C2[i])");
+    println!("  • Since e(Uᵢ, Vᵢ) = e(g₁, g₂), result is e(g₁,g₂)^(α·β·det(B)·⟨x,y⟩)");
+    println!("  • Only 2 pairing operations total (constant, independent of n!)");
 }

@@ -6,10 +6,10 @@
 use rayon::prelude::*;
 use ark_std::rand::Rng;
 
-use crate::v1::setup::{PublicParams, MasterSecretKey};
-use crate::v1::keygen::SecretKey;
-use crate::v1::encrypt::{ipe_encrypt, Ciphertext};
-use crate::v1::decrypt::{prepare_secret_key, ipe_decrypt_prepared};
+use crate::v2::setup::{PublicParams, MasterSecretKey};
+use crate::v2::keygen::SecretKey;
+use crate::v2::encrypt::{ipe_encrypt, Ciphertext};
+use crate::v2::decrypt::{prepare_secret_key, ipe_decrypt_prepared};
 use ark_bls12_381::Fr;
 
 /// Parallel batch encryption of multiple vectors
@@ -77,8 +77,8 @@ pub fn parallel_decrypt(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::setup::ipe_setup;
-    use crate::v1::keygen::ipe_keygen;
+    use crate::v2::setup::ipe_setup;
+    use crate::v2::keygen::ipe_keygen;
     use ark_std::rand::SeedableRng;
     use rand::rngs::StdRng;
 

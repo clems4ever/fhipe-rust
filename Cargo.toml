@@ -39,5 +39,13 @@ path = "examples/v2/v2_encrypt_demo.rs"
 name = "verify_v2_bases"
 path = "examples/v2/verify_bases.rs"
 
+[[example]]
+name = "debug_v2_decryption"
+path = "examples/v2/debug_decryption.rs"
+
+[[example]]
+name = "constant_pairings_demo"
+path = "examples/v2/constant_pairings_demo.rs"
+
 [features]
 default = []
