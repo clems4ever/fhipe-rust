@@ -51,7 +51,7 @@ pub fn ipe_keygen<R: Rng>(msk: &MasterSecretKey, x: &[Fr], rng: &mut R) -> Secre
 }
 
 /// Multiply a row vector by a matrix: result = x · B (optimized version)
-fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
+pub(crate) fn matrix_vector_mult(x: &[Fr], matrix: &[Vec<Fr>]) -> Vec<Fr> {
     let n = matrix.len();
     
     // Parallelize over output elements for better performance
