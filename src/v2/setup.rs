@@ -23,6 +23,9 @@ pub struct MasterSecretKey {
     pub b_matrix: Vec<Vec<Fr>>,      // B matrix (n x n)
     pub b_star_matrix: Vec<Vec<Fr>>, // B* matrix (n x n)
     pub det_b: Fr,                   // det(B) - precomputed and cached
+    pub gamma: Vec<Fr>,              // γᵢ values for correlated bases
+    pub u_bases: Vec<G1Projective>,  // Uᵢ = g₁^(γᵢ) for i=1..n
+    pub v_bases: Vec<G2Projective>,  // Vᵢ = g₂^(γᵢ⁻¹) for i=1..n
 }
 
 /// IPE.Setup(1^λ, S): Setup algorithm for Inner Product Encryption
@@ -55,6 +58,30 @@ pub fn ipe_setup(seed: usize, n: usize, search_space_size: usize) -> (PublicPara
     // Compute B* = det(B) · (B^(-1))^T
     let b_star_matrix = matrix_scalar_mult(&matrix_transpose(&b_inverse), det_b);
     
+    // Generate correlated bases: Uᵢ = g₁^(γᵢ), Vᵢ = g₂^(γᵢ⁻¹)
+    // This ensures e(Uᵢ, Vᵢ) = e(g₁, g₂) for all i
+    let mut gamma = Vec::with_capacity(n);
+    let mut u_bases = Vec::with_capacity(n);
+    let mut v_bases = Vec::with_capacity(n);
+    
+    for _ in 0..n {
+        // Sample random γᵢ ∈ Zq*
+        let gamma_i = Fr::rand(&mut rng);
+        
+        // Compute γᵢ⁻¹
+        let gamma_i_inv = gamma_i.inverse().unwrap();
+        
+        // Uᵢ = g₁^(γᵢ)
+        let u_i = g1 * gamma_i;
+        
+        // Vᵢ = g₂^(γᵢ⁻¹)
+        let v_i = g2 * gamma_i_inv;
+        
+        gamma.push(gamma_i);
+        u_bases.push(u_i);
+        v_bases.push(v_i);
+    }
+    
     // Create public parameters
     let pp = PublicParams {
         security_param: seed,
@@ -62,7 +89,7 @@ pub fn ipe_setup(seed: usize, n: usize, search_space_size: usize) -> (PublicPara
         search_space_size,
     };
     
-    // Create master secret key with cached determinant
+    // Create master secret key with cached determinant and correlated bases
     let msk = MasterSecretKey {
         pp: pp.clone(),
         g1,
@@ -70,6 +97,9 @@ pub fn ipe_setup(seed: usize, n: usize, search_space_size: usize) -> (PublicPara
         b_matrix,
         b_star_matrix,
         det_b, // Cache the determinant to avoid recomputation in KeyGen
+        gamma,
+        u_bases,
+        v_bases,
     };
     
     (pp, msk)

@@ -31,5 +31,13 @@ harness = false
 name = "prepared_bench"
 harness = false
 
+[[example]]
+name = "v2_encrypt_demo"
+path = "examples/v2/v2_encrypt_demo.rs"
+
+[[example]]
+name = "verify_v2_bases"
+path = "examples/v2/verify_bases.rs"
+
 [features]
 default = []
