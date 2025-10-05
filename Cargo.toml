@@ -31,6 +31,10 @@ harness = false
 name = "prepared_bench"
 harness = false
 
+[[bench]]
+name = "v1_vs_v2_bench"
+harness = false
+
 [[example]]
 name = "v2_encrypt_demo"
 path = "examples/v2/v2_encrypt_demo.rs"
